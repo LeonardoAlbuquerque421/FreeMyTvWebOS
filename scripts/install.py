@@ -134,9 +134,28 @@ def install_app(tv_ip, passphrase=None):
 
     print("[*] Installing package on TV...")
     install_payload = json.dumps({"id": APP_ID, "ipkUrl": "/media/developer/temp/app.ipk", "subscribe": True})
-    install_remote_cmd = f"timeout 45 luna-send-pub -n 30 luna://com.webos.appInstallService/dev/install '{install_payload}'"
-    install_res = run_luna(install_remote_cmd)
-    install_out = install_res.stdout
+    luna_install_cmd = f"luna-send-pub -n 30 luna://com.webos.appInstallService/dev/install '{install_payload}'"
+    # `timeout` caps luna-send-pub, which otherwise holds the SSH session open
+    # waiting for more replies after the final status. Its CLI differs across
+    # the TV's shell: GNU coreutils takes `timeout 45 CMD`, while the BusyBox
+    # build on many webOS versions needs `timeout -t 45 CMD` (and treats the
+    # GNU form as a bogus "45" command). Try GNU, then BusyBox, then fall back
+    # to no cap so the install still completes on any TV.
+    install_variants = [
+        f"timeout 45 {luna_install_cmd}",
+        f"timeout -t 45 {luna_install_cmd}",
+        luna_install_cmd,
+    ]
+    for variant in install_variants:
+        install_res = run_luna(variant)
+        install_out = install_res.stdout or ""
+        # A mismatched timeout CLI fails before luna-send-pub runs, so no
+        # install status is emitted; move on to the next variant.
+        if '"state":"installed"' in install_out:
+            break
+        if "timeout:" in (install_res.stderr or "") or "timeout:" in install_out:
+            continue
+        break
     if '"state":"installed"' not in install_out:
         print("[!] Install did not reach the 'installed' state. Raw output:")
         print(install_out or "(empty)")
