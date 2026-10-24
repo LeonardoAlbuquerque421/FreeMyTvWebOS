@@ -1327,7 +1327,8 @@
                                 state.sunset = data.daily.sunset[0].split('T')[1];
                                 sunsetStr = ' • Sunset ' + state.sunset;
                                 var sunsetHour = parseInt(state.sunset.split(':')[0], 10);
-                                state.isSunset = Math.abs(localNow.getUTCHours() - sunsetHour) <= 1;
+                                // localNow is already shifted to the city timezone, so compare with getHours() (local), not getUTCHours().
+                                state.isSunset = Math.abs(localNow.getHours() - sunsetHour) <= 1;
                             }
                         }
                         state.isNight = !isDay;
